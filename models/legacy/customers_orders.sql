@@ -9,13 +9,13 @@ select
     round(amount/100.0,2) as order_value_dollars,
     orders.status as order_status,
     payments.status as payment_status
-from `dbt-fundamentals-463313`.jaffle_shop.orders as orders
+from {{source('jaffle_shop','orders')}} as orders
 
 join (
       select 
         first_name || ' ' || last_name as name, 
         * 
-      from `dbt-fundamentals-463313`.jaffle_shop.customers
+      from {{source('jaffle_shop','customers')}}
 ) customers
 on orders.user_id = customers.id
 
@@ -39,14 +39,14 @@ join (
       select 
         row_number() over (partition by user_id order by order_date, id) as user_order_seq,
         *
-      from `dbt-fundamentals-463313`.jaffle_shop.orders
+      from {{source('jaffle_shop','orders')}}
     ) a
 
     join ( 
       select 
         first_name || ' ' || last_name as name, 
         * 
-      from `dbt-fundamentals-463313`.jaffle_shop.customers
+      from {{source('jaffle_shop','customers')}}
     ) b
     on a.user_id = b.id
 
@@ -60,7 +60,7 @@ join (
 ) customer_order_history
 on orders.user_id = customer_order_history.customer_id
 
-left outer join `dbt-fundamentals-463313`.stripe.payments payments
+left outer join {{source('stripe','payments')}} payments
 on orders.id = payments.orderid
 
 where payments.status != 'fail'
