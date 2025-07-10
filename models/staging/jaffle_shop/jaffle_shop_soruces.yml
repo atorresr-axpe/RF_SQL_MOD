@@ -25,21 +25,3 @@ sources:
             description: fecha en la que se realizó la orden
           - name: STATUS
             description: "{{ doc('order_status') }}"
-  - name: stripe
-    database: dbt-fundamentals-463313
-    schema: stripe
-    tables:
-      - name: payments
-        columns:
-          - name: ID
-            description: clave primaria de la tabla
-          - name: ORDERID
-            description: es el ID de la orden
-          - name: PAYMENTMETHOD
-            description: "{{ doc('payment_methods') }}"
-          - name: STATUS
-            description: "{{ doc('payment_status') }}"
-          - name: AMOUNT
-            description: monto del pago
-          - name: CREATED
-            description: fecha de emisión del pago
