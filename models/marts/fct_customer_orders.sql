@@ -1,16 +1,13 @@
 -- STAGING
-WITH customers as (
+WITH 
+
+customers as (
     select * from {{ref('stg_customers')}}
 ),
 
 orders as (
-    select * from {{ref('stg_orders')}}
+    select * from {{ref('int_orders')}}
 ),
-
-payments as (
-    select * from {{ref('stg_payments')}}
-),
-
 -- MARTS
 
 customer_order_history as (
@@ -20,39 +17,33 @@ customer_order_history as (
         b.surname,
         b.givenname,
 
-        MIN(order_date) AS first_order_date,
+        MIN(a.order_date) AS first_order_date,
 
-        MIN(CASE 
-            WHEN a.order_status NOT IN ('returned', 'return_pending') 
-            THEN order_date 
-        END) AS first_non_returned_order_date,
+        MIN(a.valid_order_date) AS first_non_returned_order_date,
 
-        MAX(CASE 
-            WHEN a.order_status NOT IN ('returned', 'return_pending') 
-            THEN order_date 
-        END) AS most_recent_non_returned_order_date,
+        MAX(a.valid_order_date) AS most_recent_non_returned_order_date,
 
         COALESCE(MAX(user_order_seq), 0) AS order_count,
 
         COALESCE(
-            COUNT(CASE WHEN a.order_status != 'returned' 
+            COUNT(CASE WHEN a.order_status != 'returned'
                 THEN 1 
             END), 0
         ) AS non_returned_order_count,
 
         SUM(CASE 
-            WHEN a.order_status NOT IN ('returned', 'return_pending') 
-            THEN c.payment_round_amount
+            WHEN a.valid_order_date is not null
+            THEN a.order_value_dollars
             ELSE 0 
         END) AS total_lifetime_value,
 
         SUM(CASE 
-            WHEN a.order_status NOT IN ('returned', 'return_pending') 
-            THEN c.payment_round_amount
+            WHEN a.valid_order_date is not null
+            THEN a.order_value_dollars
             ELSE 0 
         END) / NULLIF(
             COUNT(CASE 
-                    WHEN a.order_status NOT IN ('returned', 'return_pending') 
+                    WHEN a.valid_order_date is not null
                     THEN 1 
                 END), 0
         ) AS avg_non_returned_order_value,
@@ -63,12 +54,6 @@ customer_order_history as (
         orders a
     JOIN 
         customers b ON a.customer_id = b.customer_id
-    LEFT OUTER JOIN 
-        payments c ON a.order_id = c.order_id
-
-    WHERE 
-        a.order_status NOT IN ('pending') 
-        AND c.payment_status != 'fail'
 
     GROUP BY 
         b.customer_id, b.full_name, b.surname, b.givenname
@@ -85,9 +70,9 @@ final AS (
         customer_order_history.first_order_date,
         customer_order_history.order_count,
         customer_order_history.total_lifetime_value,
-        payments.payment_round_amount AS order_value_dollars,
+        orders.order_value_dollars,
         orders.order_status,
-        payments.payment_status
+        orders.payment_status
 
     FROM 
         orders 
@@ -98,11 +83,6 @@ final AS (
     JOIN 
         customer_order_history ON orders.customer_id = customer_order_history.customer_id
 
-    LEFT OUTER JOIN 
-        payments ON orders.order_id = payments.order_id
-
-    WHERE 
-        payments.payment_status != 'fail'
 )
 
 -- Simple select statement
