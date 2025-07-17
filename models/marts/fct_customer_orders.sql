@@ -8,81 +8,85 @@ customers as (
 orders as (
     select * from {{ref('int_orders')}}
 ),
--- MARTS
 
-customer_order_history as (
-    SELECT 
-        b.customer_id,
-        b.full_name,
-        b.surname,
-        b.givenname,
+----------
 
-        MIN(a.order_date) AS first_order_date,
+customer_orders AS (
+    SELECT
 
-        MIN(a.valid_order_date) AS first_non_returned_order_date,
-
-        MAX(a.valid_order_date) AS most_recent_non_returned_order_date,
-
-        COALESCE(MAX(user_order_seq), 0) AS order_count,
-
-        COALESCE(
-            COUNT(CASE WHEN a.order_status != 'returned'
-                THEN 1 
-            END), 0
-        ) AS non_returned_order_count,
-
-        SUM(CASE 
-            WHEN a.valid_order_date is not null
-            THEN a.order_value_dollars
-            ELSE 0 
-        END) AS total_lifetime_value,
-
-        SUM(CASE 
-            WHEN a.valid_order_date is not null
-            THEN a.order_value_dollars
-            ELSE 0 
-        END) / NULLIF(
-            COUNT(CASE 
-                    WHEN a.valid_order_date is not null
-                    THEN 1 
-                END), 0
-        ) AS avg_non_returned_order_value,
-                                        
-        ARRAY_AGG(DISTINCT a.order_id) AS order_ids
-
-    FROM 
-        orders a
-    JOIN 
-        customers b ON a.customer_id = b.customer_id
-
-    GROUP BY 
-        b.customer_id, b.full_name, b.surname, b.givenname
-),
-
--- Final CTEs
-
-final AS (
-    SELECT 
-        orders.order_id,
-        orders.customer_id,
+        orders.*,
+        customers.full_name,
         customers.surname,
         customers.givenname,
-        customer_order_history.first_order_date,
-        customer_order_history.order_count,
-        customer_order_history.total_lifetime_value,
-        orders.order_value_dollars,
-        orders.order_status,
-        orders.payment_status
+
+        MIN(orders.order_date) OVER (
+            PARTITION BY orders.customer_id
+        ) AS customer_first_order_date,
+
+        MIN(orders.valid_order_date) OVER (
+            PARTITION BY orders.customer_id
+        ) AS customer_first_non_returned_order_date,
+
+        MAX(orders.valid_order_date) OVER (
+            PARTITION BY orders.customer_id
+        ) AS customer_most_recent_non_returned_order_date,
+
+        COUNT(*) OVER (
+            PARTITION BY orders.customer_id
+        ) AS customer_order_count,
+
+        COALESCE(
+            COUNT(CASE 
+                WHEN orders.order_status != 'returned' THEN 1
+            END) OVER (PARTITION BY orders.customer_id), 
+            0
+        ) AS customer_non_returned_order_count,
+
+        SUM(CASE 
+            WHEN orders.valid_order_date IS NOT NULL THEN orders.order_value_dollars
+            ELSE 0 
+        END) over (partition by orders.customer_id) AS customer_total_lifetime_value
 
     FROM 
-        orders 
-
-    JOIN 
+        orders
+    INNER JOIN 
         customers ON orders.customer_id = customers.customer_id
+),
 
-    JOIN 
-        customer_order_history ON orders.customer_id = customer_order_history.customer_id
+array_int_cte as (
+select
+    orders.customer_id,
+    ARRAY_AGG(DISTINCT orders.order_id) as customer_orders_id
+from
+    orders
+group by
+    orders.customer_id
+),
 
+add_avg_non_returned_order_value as (
+select
+    customer_orders.*,
+    customer_orders.customer_total_lifetime_value / nullif(customer_orders.customer_non_returned_order_count,0) as customer_avg_non_returned_order_value,
+    array_int_cte.customer_orders_id
+from
+    customer_orders left join array_int_cte
+    on customer_orders.customer_id = array_int_cte.customer_id
+),
+
+final as (
+    select
+        order_id,
+        customer_id,
+        surname,
+        givenname,
+        customer_first_order_date as first_order_date,
+        customer_order_count as order_count,
+        customer_total_lifetime_value as total_lifetime_value,
+        order_value_dollars,
+        order_status,
+        payment_status
+    from 
+        add_avg_non_returned_order_value
 )
 
 -- Simple select statement
