@@ -5,6 +5,8 @@ customers as (
     select * from {{ref('stg_customers')}}
 ),
 
+-- INTERMEDIATE
+
 orders as (
     select * from {{ref('int_orders')}}
 ),
@@ -72,6 +74,9 @@ from
     customer_orders left join array_int_cte
     on customer_orders.customer_id = array_int_cte.customer_id
 ),
+
+
+-- MART
 
 final as (
     select
