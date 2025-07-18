@@ -1,0 +1,27 @@
+version: 2
+
+sources:
+  - name: jaffle_shop
+    database: dbt-fundamentals-463313
+    schema: jaffle_shop
+    tables:
+      - name: customers
+        description: existe un registro por cliente
+        columns:
+          - name: ID
+            description: clave primaria de la tabla
+          - name: FIRST_NAME
+            description: nombre propio del cliente
+          - name: LAST_NAME
+            description: apellidos del cliente
+      - name: orders
+        description: un registro por orden
+        columns:
+          - name: ID
+            description: clave primaria de la tabla
+          - name: USER_ID
+            description: es el ID del cliente
+          - name: ORDER_DATE
+            description: fecha en la que se realizó la orden
+          - name: STATUS
+            description: "{{ doc('order_status') }}"
